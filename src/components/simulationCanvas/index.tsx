@@ -111,7 +111,7 @@ export default function SimulatorCanvas(props: SimulatorCanvasProps) {
     ctx.fillText(String(counts.S), cx, cy + stopDist + 48);
     ctx.fillText(String(counts.W), cx - stopDist - 48, cy);
 
-    // ⬅⬅ NOVO: tempos de espera
+    // wait times
     ctx.fillStyle = "#94a3b8";
     ctx.font = "12px ui-monospace";
 
