@@ -1,4 +1,3 @@
-// ...existing code...
 import { Direction } from "@/types/direction";
 import { SubState } from "@/types/light-state";
 import { SimulationConfig } from "@/types/simulation-config";
