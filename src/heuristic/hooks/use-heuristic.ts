@@ -1,3 +1,4 @@
+// ...existing code...
 import { Direction } from "@/types/direction";
 import { SubState } from "@/types/light-state";
 import { SimulationConfig } from "@/types/simulation-config";
@@ -40,6 +41,7 @@ export function useHeuristicTrafficLightSim(
   const [avgWait, setAvgWait] = useState(0);
 
   // para calcular espera média por veículo atendido
+  // bornTimesRef mantém os tempos de chegada apenas dos veículos ainda na fila
   const bornTimesRef = useRef<Record<Direction, number[]>>({
     N: [],
     E: [],
@@ -48,47 +50,28 @@ export function useHeuristicTrafficLightSim(
   });
   
 
-  // marca o tempo em que a fila começou a esperar
-  const waitStartRef = useRef<Record<Direction, number>>({
-    N: 0,
-    E: 0,
-    S: 0,
-    W: 0,
-  });
-
-
-  // tempos de espera por fila
+  // tempos de espera por fila (calculados a partir de bornTimesRef)
   const waitTimes = useMemo(() => {
-  const wt: Record<Direction, number> = { N: 0, E: 0, S: 0, W: 0 };
+    const wt: Record<Direction, number> = { N: 0, E: 0, S: 0, W: 0 };
 
-  (["N", "E", "S", "W"] as Direction[]).forEach((d) => {
-    const start = waitStartRef.current[d];
+    (["N", "E", "S", "W"] as Direction[]).forEach((d) => {
+      if (counts[d] > 0 && bornTimesRef.current[d].length > 0) {
+        wt[d] = simTime - bornTimesRef.current[d][0];
+      } else {
+        wt[d] = 0;
+      }
+    });
 
-    // fila está esperando → calcula tempo
-    if (counts[d] > 0 && start > 0) {
-      wt[d] = simTime - start;
-    } else {
-      wt[d] = 0;
-    }
-  });
-
-  return wt;
-}, [simTime, counts]);
+    return wt;
+  }, [simTime, counts]);
 
 
   
   // ---- ações públicas
   const addCar = useCallback(
     (d: Direction) => {
-      setCounts((c) => {
-        const wasEmpty = c[d] === 0;
-        if (wasEmpty) {
-          // fila começou a esperar
-          waitStartRef.current[d] = simTime;
-        }
-        return { ...c, [d]: c[d] + 1 };
-      });
-
+      setCounts((c) => ({ ...c, [d]: c[d] + 1 }));
+      // registra tempo de chegada do veículo (usado para cálculo de espera por veículo)
       bornTimesRef.current[d].push(simTime);
     },
     [simTime]
@@ -97,7 +80,6 @@ export function useHeuristicTrafficLightSim(
   const reset = useCallback(() => {
     setCounts({ N: 0, E: 0, S: 0, W: 0 });
     bornTimesRef.current = { N: [], E: [], S: [], W: [] };
-    waitStartRef.current = { N: 0, E: 0, S: 0, W: 0 };
     setPhase("N");
     setSubState("green");
     setTimer(config.GREEN_MIN);
@@ -109,31 +91,52 @@ export function useHeuristicTrafficLightSim(
 
   const togglePause = useCallback(() => setPaused((p) => !p), []);
 
-  // ---- política heurística com tempo de espera
+  // ---- política heurística
   const chooseNextPhase = useCallback(
-    (c: Record<Direction, number>, current: Direction): Direction => {
+    (
+      c: Record<Direction, number>,
+      current: Direction,
+      now: number
+    ): Direction => {
       const others = DIR_ORDER.filter((d) => d !== current);
 
-      const best = others.reduce((acc, d) => {
-        if (c[d] !== c[acc]) return c[d] > c[acc] ? d : acc;
+      // 1) encontrar maior contagem entre os outros
+      let maxOthersCount = -Infinity;
+      others.forEach((d) => {
+        if (c[d] > maxOthersCount) maxOthersCount = c[d];
+      });
 
-        // usa o tempo REAL de espera, não o tempo quando começou a esperar
-        const accWait = waitTimes[acc];
-        const dWait = waitTimes[d];
+      const bestCandidates = others.filter((d) => c[d] === maxOthersCount);
 
-        return dWait > accWait ? d : acc;
-      }, others[0]);
+      // função auxiliar para obter tempo de espera real do "primeiro" carro na fila
+      const getWait = (d: Direction) =>
+        c[d] > 0 && bornTimesRef.current[d].length > 0
+          ? now - bornTimesRef.current[d][0]
+          : 0;
 
-      const hasPriority =
-        c[best] >= c[current] + config.SWITCH_THRESHOLD ||
-        waitTimes[best] > waitTimes[current];
+      // 2) se algum outro tem pelo menos SWITCH_THRESHOLD a mais, escolha entre os com maior contagem
+      if (maxOthersCount >= c[current] + config.SWITCH_THRESHOLD) {
+        // entre os candidatos com maior contagem, escolher o que tem maior espera
+        return bestCandidates.reduce((acc, d) => {
+          return getWait(d) > getWait(acc) ? d : acc;
+        }, bestCandidates[0]);
+      }
 
-      if (hasPriority) return best;
+      // 3) se houver empate (mesma contagem entre current e outros), analisar todos os empatados (incluindo current)
+      if (maxOthersCount === c[current]) {
+        const tied = DIR_ORDER.filter((d) => c[d] === c[current]);
+        const chosen = tied.reduce((acc, d) => {
+          return getWait(d) > getWait(acc) ? d : acc;
+        }, tied[0]);
 
+        if (chosen !== current) return chosen;
+      }
+
+      // 4) caso contrário, não há motivo sólido para trocar → ir ao próximo na ordem
       const idx = DIR_ORDER.indexOf(current);
       return DIR_ORDER[(idx + 1) % DIR_ORDER.length];
     },
-    [config.SWITCH_THRESHOLD, waitTimes]
+    [config.SWITCH_THRESHOLD]
   );
 
 
@@ -160,20 +163,23 @@ export function useHeuristicTrafficLightSim(
             }
 
             if (canServe > 0) {
-              setServed((s) => s + canServe);
-              setAvgWait((w) => {
-                const totalServed = served + canServe;
-                const newTotalWait = w * served + waitSum;
-                return totalServed > 0 ? newTotalWait / totalServed : 0;
+              // garantir cálculo consistente usando atualizações funcionais
+              setServed((sPrev) => {
+                const newServed = sPrev + canServe;
+                setAvgWait((wPrev) => {
+                  const newTotalWait = wPrev * sPrev + waitSum;
+                  return newServed > 0 ? newTotalWait / newServed : 0;
+                });
+                return newServed;
               });
             }
           }
 
           const newCount = Math.max(0, c[d] - config.SERVICE_RATE);
 
-          // se a fila zerou → resetar tempo de espera
+          // se a fila zerou → garantir que a lista de nascimentos está vazia
           if (newCount === 0) {
-            waitStartRef.current[d] = 0;
+            bornTimesRef.current[d] = [];
           }
 
           return { ...c, [d]: newCount };
@@ -184,7 +190,7 @@ export function useHeuristicTrafficLightSim(
       setTimer((t) => t - 1);
 
       const decideAfterGreen = () => {
-        const next = chooseNextPhase(counts, phase);
+        const next = chooseNextPhase(counts, phase, simTime);
 
         if (next !== phase || counts[phase] === 0) {
           setSubState("yellow");
@@ -205,7 +211,7 @@ export function useHeuristicTrafficLightSim(
           setSubState("allred");
           setTimer(config.ALL_RED);
         } else if (subState === "allred") {
-          const next = chooseNextPhase(counts, phase);
+          const next = chooseNextPhase(counts, phase, simTime);
           setPhase(next);
           setSubState("green");
           setTimer(config.GREEN_MIN);
@@ -238,7 +244,7 @@ export function useHeuristicTrafficLightSim(
 
   return {
     counts,
-    waitTimes,   // <--- ADICIONE AQUI
+    waitTimes,
     phase,
     subState,
     timer,
