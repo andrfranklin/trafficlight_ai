@@ -38,7 +38,7 @@ export default function HeuristicTrafficLightSim() {
           onAdd={sim.actions.addCar}
           onReset={sim.actions.reset}
           onTogglePause={sim.actions.togglePause}
-          policyNote={`Política heurística: após o verde mínimo, troca se outra direção tiver pelo menos +${sim.config.SWITCH_THRESHOLD} carro(s) e em caso de empate, analisa-se o tempo de espera da fila; amarelo ${sim.config.YELLOW}s; all-red ${sim.config.ALL_RED}s; atendimento ${sim.config.SERVICE_RATE}/s.`}
+          policyNote={`Política heurística: após o verde mínimo, troca se outra direção tiver pelo menos +${sim.config.SWITCH_THRESHOLD} carro(s) e em caso de empate, analisam-se os tempos de espera das filas; amarelo ${sim.config.YELLOW}s; all-red ${sim.config.ALL_RED}s; atendimento ${sim.config.SERVICE_RATE}/s.`}
         />
       </main>
     </div>
