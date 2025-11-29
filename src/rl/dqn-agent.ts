@@ -96,16 +96,18 @@ export class DQNAgent {
     this.targetNet.setWeights(weights);
   }
 
-  // política ε-greedy
   act(state: number[]): number {
     if (Math.random() < this.epsilon) {
       return Math.floor(Math.random() * this.cfg.actionSize);
     }
+
     const s = tf.tensor2d([state]);
     const qValues = this.qNet.predict(s) as tf.Tensor2D;
     const data = qValues.dataSync();
+
     s.dispose();
     qValues.dispose();
+
     let best = 0;
     for (let i = 1; i < data.length; i++) {
       if (data[i] > data[best]) best = i;
@@ -137,8 +139,7 @@ export class DQNAgent {
     batch.forEach((b, i) => {
       const target = qTargetsData[i];
       const maxNext = Math.max(...qNextData[i]);
-      const y =
-        b.done ? b.reward : b.reward + this.cfg.gamma * maxNext;
+      const y = b.done ? b.reward : b.reward + this.cfg.gamma * maxNext;
       target[b.action] = y;
     });
 
@@ -170,19 +171,29 @@ export class DQNAgent {
   }
 
   async saveLocal() {
-    await this.qNet.save("localstorage://traffic-dqn");
+    await this.qNet.save("downloads://traffic-dqn");
   }
 
-  static async loadLocal(cfg: DQNConfig): Promise<DQNAgent | null> {
+  static async loadFromFile(cfg: DQNConfig): Promise<DQNAgent | null> {
     try {
       const model = await tf.loadLayersModel(
-        "localstorage://traffic-dqn"
+        "/models/traffic-dqn/model.json"
       );
+
       const agent = new DQNAgent(cfg);
+
       agent.qNet = model;
+
+      agent.qNet.compile({
+        optimizer: tf.train.adam(cfg.lr),
+        loss: "meanSquaredError",
+      });
+
       agent.updateTarget();
+
       return agent;
-    } catch {
+    } catch (e) {
+      console.error("Falha ao carregar modelo da pasta /models:", e);
       return null;
     }
   }
