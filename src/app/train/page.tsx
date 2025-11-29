@@ -13,7 +13,7 @@ export default function TrainPage() {
     setLog("Treinando agente DQN...");
     try {
       await trainTrafficAgent();
-      setLog("Treino concluído e modelo salvo em localStorage.");
+      setLog("Treino concluído e modelo salvo em downloads");
     } catch (e) {
       console.error(e);
       setLog("Erro durante o treino. Veja o console.");

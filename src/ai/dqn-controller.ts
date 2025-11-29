@@ -48,7 +48,7 @@ export class DqnUIController {
   async init() {
     const loaded = await DQNAgent.loadFromFile(DQN_CFG_UI);
     if (!loaded) {
-      throw new Error("Modelo DQN não encontrado no localStorage");
+      throw new Error("Modelo DQN não encontrado");
     }
     this.agent = loaded;
   }

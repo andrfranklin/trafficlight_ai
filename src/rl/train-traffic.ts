@@ -55,5 +55,5 @@ export async function trainTrafficAgent(
   }
 
   await agent.saveLocal();
-  console.log("Modelo salvo em localstorage://traffic-dqn");
+  console.log("Modelo salvo em downloads://traffic-dqn");
 }

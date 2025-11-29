@@ -32,6 +32,7 @@ export default function AiPage() {
                         width={sim.canvas.width}
                         height={sim.canvas.height}
                         counts={sim.counts}
+                        waitTimes={sim.waitTimes}
                         phase={sim.phase}
                         subState={sim.subState}
                         timer={sim.timer}

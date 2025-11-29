@@ -21,6 +21,7 @@ export default function HeuristicPage() {
                         width={sim.canvas.width}
                         height={sim.canvas.height}
                         counts={sim.counts}
+                        waitTimes={sim.waitTimes}
                         phase={sim.phase}
                         subState={sim.subState}
                         timer={sim.timer}
@@ -36,7 +37,7 @@ export default function HeuristicPage() {
                     onAdd={sim.actions.addCar}
                     onReset={sim.actions.reset}
                     onTogglePause={sim.actions.togglePause}
-                    policyNote={`Heurística: após verde mínimo, troca se outra direção tiver +${sim.config.SWITCH_THRESHOLD} carro(s); amarelo ${sim.config.YELLOW}s; all-red ${sim.config.ALL_RED}s.`}
+                    policyNote={`Política heurística: após o verde mínimo, troca se outra direção tiver pelo menos +${sim.config.SWITCH_THRESHOLD} carro(s) e em caso de empate, analisam-se os tempos de espera das filas; amarelo ${sim.config.YELLOW}s; all-red ${sim.config.ALL_RED}s; atendimento ${sim.config.SERVICE_RATE}/s.`}
                 />
             </main>
         </div>

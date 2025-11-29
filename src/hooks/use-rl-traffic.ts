@@ -1,4 +1,4 @@
-// src/hooks/use-rl-traffic.ts (por exemplo)
+// src/hooks/use-rl-traffic.ts
 "use client";
 
 import { Direction } from "@/types/direction";
@@ -52,7 +52,7 @@ export function useRLTrafficLightSim(
     async function initController() {
       try {
         const ctrl = new DqnUIController();
-        await ctrl.init(); // tenta carregar modelo do localStorage
+        await ctrl.init(); // tenta carregar modelo
         if (!cancelled) {
           controllerRef.current = ctrl;
           setControllerReady(true);
@@ -74,12 +74,27 @@ export function useRLTrafficLightSim(
   }, []);
 
   // para calcular espera média por veículo atendido
+  // e também tempo de espera atual por fila (espera do 1º carro)
   const bornTimesRef = useRef<Record<Direction, number[]>>({
     N: [],
     E: [],
     S: [],
     W: [],
   });
+
+  const waitTimes = useMemo(() => {
+    const wt: Record<Direction, number> = { N: 0, E: 0, S: 0, W: 0 };
+
+    (["N", "E", "S", "W"] as Direction[]).forEach((d) => {
+      if (counts[d] > 0 && bornTimesRef.current[d].length > 0) {
+        wt[d] = simTime - bornTimesRef.current[d][0];
+      } else {
+        wt[d] = 0;
+      }
+    });
+
+    return wt;
+  }, [simTime, counts]);
 
   // ---- ações públicas
   const addCar = useCallback(
@@ -106,17 +121,44 @@ export function useRLTrafficLightSim(
 
   // ---- política heurística (fallback se IA não estiver disponível)
   const chooseNextPhaseHeuristic = useCallback(
-    (c: Record<Direction, number>, current: Direction): Direction => {
+    (
+      c: Record<Direction, number>,
+      current: Direction,
+      now: number
+    ): Direction => {
       const others = DIR_ORDER.filter((d) => d !== current);
-      const best = others.reduce(
-        (acc, d) => (c[d] > c[acc] ? d : acc),
-        others[0]
-      );
 
-      const hasPriority = c[best] >= c[current] + config.SWITCH_THRESHOLD;
+      // 1) maior contagem entre os outros
+      let maxOthersCount = -Infinity;
+      others.forEach((d) => {
+        if (c[d] > maxOthersCount) maxOthersCount = c[d];
+      });
 
-      if (hasPriority) return best;
+      const bestCandidates = others.filter((d) => c[d] === maxOthersCount);
 
+      const getWait = (d: Direction) =>
+        c[d] > 0 && bornTimesRef.current[d].length > 0
+          ? now - bornTimesRef.current[d][0]
+          : 0;
+
+      // 2) se algum outro tem pelo menos SWITCH_THRESHOLD a mais
+      if (maxOthersCount >= c[current] + config.SWITCH_THRESHOLD) {
+        return bestCandidates.reduce((acc, d) =>
+          getWait(d) > getWait(acc) ? d : acc
+        , bestCandidates[0]);
+      }
+
+      // 3) empate de contagem com a corrente: escolher quem espera mais
+      if (maxOthersCount === c[current]) {
+        const tied = DIR_ORDER.filter((d) => c[d] === c[current]);
+        const chosen = tied.reduce((acc, d) =>
+          getWait(d) > getWait(acc) ? d : acc
+        , tied[0]);
+
+        if (chosen !== current) return chosen;
+      }
+
+      // 4) caso contrário, segue a ordem de rotação
       const idx = DIR_ORDER.indexOf(current);
       return DIR_ORDER[(idx + 1) % DIR_ORDER.length];
     },
@@ -136,6 +178,7 @@ export function useRLTrafficLightSim(
         setCounts((c) => {
           const d = phase;
           const canServe = Math.min(config.SERVICE_RATE, c[d]);
+
           if (canServe > 0) {
             const births = bornTimesRef.current[d];
             let waitSum = 0;
@@ -143,34 +186,36 @@ export function useRLTrafficLightSim(
               const born = births.shift();
               if (born != null) waitSum += simTime + 1 - born;
             }
+
             if (canServe > 0) {
-              setServed((s) => s + canServe);
-              setAvgWait((w) => {
-                const totalServed = served + canServe;
-                const newTotalWait = w * served + waitSum;
-                return totalServed > 0 ? newTotalWait / totalServed : 0;
+              setServed((sPrev) => {
+                const newServed = sPrev + canServe;
+                setAvgWait((wPrev) => {
+                  const newTotalWait = wPrev * sPrev + waitSum;
+                  return newServed > 0 ? newTotalWait / newServed : 0;
+                });
+                return newServed;
               });
             }
           }
-          return { ...c, [d]: Math.max(0, c[d] - config.SERVICE_RATE) };
+
+          const newCount = Math.max(0, c[d] - config.SERVICE_RATE);
+
+          if (newCount === 0) {
+            bornTimesRef.current[d] = [];
+          }
+
+          return { ...c, [d]: newCount };
         });
       }
 
-      // 3) controlador de fases → decrementa timer
+      // 3) decrementa timer
       setTimer((t) => t - 1);
 
       const decideAfterGreen = () => {
-        const others: Direction[] = (["N", "E", "S", "W"] as Direction[]).filter(
-          (d) => d !== phase
-        );
-        const best = others.reduce(
-          (acc, d) => (counts[d] > counts[acc] ? d : acc),
-          others[0]
-        );
-        const shouldSwitch =
-          counts[best] >= counts[phase] + config.SWITCH_THRESHOLD;
+        const next = chooseNextPhaseHeuristic(counts, phase, simTime);
 
-        if (shouldSwitch || counts[phase] === 0) {
+        if (next !== phase || counts[phase] === 0) {
           setSubState("yellow");
           setTimer(config.YELLOW);
         } else {
@@ -178,7 +223,7 @@ export function useRLTrafficLightSim(
         }
       };
 
-      // 4) quando o timer zerar, transiciona a sub-fase
+      // 4) transições de sub-fase
       setTimeout(() => {
         if (timer - 1 > 0) return;
 
@@ -188,19 +233,19 @@ export function useRLTrafficLightSim(
           setSubState("allred");
           setTimer(config.ALL_RED);
         } else if (subState === "allred") {
-          // 🔥 AQUI entra a IA (DqnUIController) em vez de só heurística
           const ctrl = controllerRef.current;
 
           let next: Direction;
           if (ctrl && controllerReady && !controllerError) {
+            // IA decide a próxima fase (UI → DQN)
             next = ctrl.decideNextPhase({
               counts,
               phase,
               subState,
             });
           } else {
-            // fallback heurístico
-            next = chooseNextPhaseHeuristic(counts, phase);
+            // fallback heurístico com mesma lógica do hook heurístico
+            next = chooseNextPhaseHeuristic(counts, phase, simTime);
           }
 
           setPhase(next);
@@ -236,6 +281,7 @@ export function useRLTrafficLightSim(
 
   return {
     counts,
+    waitTimes,
     phase,
     subState,
     timer,
