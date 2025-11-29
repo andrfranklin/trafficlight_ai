@@ -1,7 +1,7 @@
 'use client'
 import ControlsPanel from "@/components/controlPanel";
 import SimulatorCanvas from "@/components/simulationCanvas";
-import { useRLTrafficLightSim } from "@/heuristic/hooks/use-rl-traffic";
+import { useRLTrafficLightSim } from "@/hooks/use-rl-traffic";
 
 export default function AiPage() {
     const sim = useRLTrafficLightSim(

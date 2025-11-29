@@ -1,7 +1,7 @@
 'use client'
 import ControlsPanel from "@/components/controlPanel";
 import SimulatorCanvas from "@/components/simulationCanvas";
-import { useHeuristicTrafficLightSim } from "@/heuristic/hooks/use-heuristic";
+import { useHeuristicTrafficLightSim } from "@/hooks/use-heuristic";
 
 export default function HeuristicPage() {
     const sim = useHeuristicTrafficLightSim(
