@@ -13,7 +13,7 @@ export default function HeuristicTrafficLightSim() {
   return (
     <div style={{ minHeight: '100vh', background: '#0b1020', color: '#e7eefc', fontFamily: 'system-ui' }}>
       <header style={{ padding: '12px 16px', borderBottom: '1px solid #1f2937' }}>
-        <h1 style={{ margin: 0, fontSize: 18 }}>🚦 TrafficLight AI — MVP (hook + componentes)</h1>
+        <h1 style={{ margin: 0, fontSize: 18 }}>🚦 TrafficLight AI — MVP</h1>
       </header>
 
       <main style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, padding: 16 }}>
