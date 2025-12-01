@@ -171,23 +171,23 @@ export class DQNAgent {
   }
 
   async saveLocal() {
-    await this.qNet.save("downloads://traffic-dqn");
+    await this.qNet.save("localstorage://traffic-dqn");
   }
 
   static async loadFromFile(cfg: DQNConfig): Promise<DQNAgent | null> {
     try {
       const model = await tf.loadLayersModel(
-        "/models/traffic-dqn/model.json"
+        "localstorage://traffic-dqn"
       );
 
       const agent = new DQNAgent(cfg);
 
       agent.qNet = model;
 
-      agent.qNet.compile({
-        optimizer: tf.train.adam(cfg.lr),
-        loss: "meanSquaredError",
-      });
+      // agent.qNet.compile({
+      //   optimizer: tf.train.adam(cfg.lr),
+      //   loss: "meanSquaredError",
+      // });
 
       agent.updateTarget();
 

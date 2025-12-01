@@ -198,11 +198,7 @@ export default function Home() {
             color: '#6b7280',
           }}
         >
-          <p style={{ margin: 0 }}>
-            Dica: você pode usar esta página como hub para comparar as
-            políticas, medir métricas e eventualmente adicionar outras versões
-            (por exemplo, diferentes heurísticas ou modelos de RL).
-          </p>
+          
         </section>
       </main>
     </div>
