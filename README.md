@@ -13,10 +13,23 @@ O projeto consiste em um simulador de trafégo onde possuímos um semáforo que 
 
 ## Guia de Instalação e Execução
 - Clone o repositório
-- Acesse a raiz do projeto e instale as dependências com 'npm install' (necessário possuir node)
+- Acesse a raiz do projeto e instale as dependências com 'npm install' (necessário possuir node versão 20 ou superior)
 - Execute a aplicação com 'npm run dev'
 
-A aplicação executará em [http://localhost:3000](http://localhost:3000)
+A aplicação executará em [http://localhost:3000](http://localhost:3000)  
+
+## Rotas da aplicação
+
+A aplicação possui as seguintes rotas:
+- /heuristic  
+  Executa a simulação usando somente heurística, sem IA.
+- /ai  
+  Executa a simulação usando o modelo DQN treinado  
+  Caso o modelo esteja carregado corretamente a partir do localStorage, aparecerá um indicador verde no topo da página:
+- /train  
+  Interface para treinar o agente DQN e salvar o modelo
+
+**Adendo:** O tempo de treinamento é longo (30~40 minutos). Assim que o treinamento for concluído e o modelo for salvo automaticamente no localStorage, a rota /ai será capaz de carregar o modelo e exibirá o aviso: 'DQN carregada ✅'
 
 ## Estrutura dos Arquivos
 
@@ -60,10 +73,10 @@ Organiza blocos visuais reutilizáveis, independentes da simulação.
 
 ---
 
-### `src/heuristic/hooks/`
+### `src/hooks/`
 Contém a lógica central que atualiza o estado da simulação.
 
-## `use-heuristic.ts`
+### `use-heuristic.ts`
 - Hook **sem IA**, apenas regra heurística.  
 - Implementa:
   - filas de carros  
@@ -73,7 +86,7 @@ Contém a lógica central que atualiza o estado da simulação.
   - rotação de fase com threshold  
 - Usado exclusivamente pela rota `/heuristic`.
 
-## `use-rl-traffic.ts`
+### `use-rl-traffic.ts`
 - Hook que usa **DQN treinado**.  
 - No ciclo allred → green, usa:
   ```ts
@@ -87,7 +100,7 @@ Tudo relacionado ao agente DQN, estado de treino e simulação acelerada fica ne
 
 ---
 
-## `dqn-agent.ts`
+### `dqn-agent.ts`
 Implementação completa do agente **Deep Q-Network (DQN)**:
 
 - Rede neural principal (*Q-Network*)
@@ -101,7 +114,7 @@ Implementação completa do agente **Deep Q-Network (DQN)**:
 
 ---
 
-## `traffic-env.ts`
+### `traffic-env.ts`
 Ambiente de treino acelerado (sem canvas).  
 Responsável por simular rapidamente as interações agente → ambiente.
 
@@ -119,7 +132,7 @@ Usado exclusivamente pelo processo de treinamento.
 
 ---
 
-## `simulation-state.ts`
+### `simulation-state.ts`
 Define os tipos e helpers para representar o **estado interno do ambiente de treino**:
 
 - estado compactado (para RL)
@@ -130,7 +143,7 @@ Mantém o agente independente da simulação real da UI.
 
 ---
 
-## `train-traffic.ts`
+### `train-traffic.ts`
 Arquivo responsável por **treinar o agente DQN**.
 
 Funções principais:
@@ -144,5 +157,4 @@ Funções principais:
 ## Resultados e Demonstração
 
 
-
-## Referências
+  
