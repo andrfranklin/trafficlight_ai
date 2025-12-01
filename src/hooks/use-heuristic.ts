@@ -1,7 +1,8 @@
+/* eslint-disable prefer-const */
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Direction } from "@/types/direction";
 import { SubState } from "@/types/light-state";
 import { SimulationConfig } from "@/types/simulation-config";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const DEFAULT_CONFIG: SimulationConfig = {
   GREEN_MIN: 6,
@@ -11,249 +12,373 @@ const DEFAULT_CONFIG: SimulationConfig = {
   SWITCH_THRESHOLD: 1,
 };
 
-const DIR_ORDER: Direction[] = ["N", "E", "S", "W"];
+const DIRECTIONS_IN_ORDER: Direction[] = ["N", "E", "S", "W"];
+
+type QueueByDirection = Record<Direction, number>;
+type ArrivalTimesByDirection = Record<Direction, number[]>;
+type QueueAgesByDirection = Record<Direction, number>;
+type WaitTimesByDirection = Record<Direction, number>;
+
+interface CanvasSize {
+  width?: number;
+  height?: number;
+}
+
+interface SimulationState {
+  time: number;
+  phase: Direction;
+  subState: SubState;
+  timer: number;
+  queues: QueueByDirection;
+  arrivalTimes: ArrivalTimesByDirection;
+  queueAges: QueueAgesByDirection;
+  servedCount: number;
+  totalWaitTime: number;
+}
+
+function createEmptyQueues(): QueueByDirection {
+  return { N: 0, E: 0, S: 0, W: 0 };
+}
+
+function createEmptyArrivalTimes(): ArrivalTimesByDirection {
+  return { N: [], E: [], S: [], W: [] };
+}
+
+function createEmptyQueueAges(): QueueAgesByDirection {
+  return { N: 0, E: 0, S: 0, W: 0 };
+}
+
+/**
+ * Política heurística:
+ * - se alguma outra direção tem fila >= fila atual + limiar → prioriza essa,
+ *   escolhendo entre as empatadas pela maior espera
+ * - se há empate geral (incluindo a atual) → escolhe entre empatadas quem espera mais
+ * - caso contrário → segue round-robin (N → E → S → W → N)
+ */
+function chooseNextPhaseHeuristic(
+  queues: QueueByDirection,
+  currentPhase: Direction,
+  nowTime: number,
+  arrivalTimes: ArrivalTimesByDirection,
+  switchThreshold: number
+): Direction {
+  const otherDirections = DIRECTIONS_IN_ORDER.filter(
+    (direction) => direction !== currentPhase
+  );
+
+  let maxQueueSizeAmongOthers = -Infinity;
+  for (const direction of otherDirections) {
+    if (queues[direction] > maxQueueSizeAmongOthers) {
+      maxQueueSizeAmongOthers = queues[direction];
+    }
+  }
+
+  const bestCandidates = otherDirections.filter(
+    (direction) => queues[direction] === maxQueueSizeAmongOthers
+  );
+
+  const getFirstVehicleWaitTime = (direction: Direction): number => {
+    const queueSize = queues[direction];
+    const arrivals = arrivalTimes[direction];
+
+    if (queueSize > 0 && arrivals.length > 0) {
+      return nowTime - arrivals[0];
+    }
+    return 0;
+  };
+
+  const currentPhaseQueueSize = queues[currentPhase];
+
+  // 1) Alguma outra direção está mais cheia?
+  if (maxQueueSizeAmongOthers >= currentPhaseQueueSize + switchThreshold) {
+    return bestCandidates.reduce((best, candidate) => {
+      const bestWait = getFirstVehicleWaitTime(best);
+      const candidateWait = getFirstVehicleWaitTime(candidate);
+      return candidateWait > bestWait ? candidate : best;
+    }, bestCandidates[0]);
+  }
+
+  // 2) Empate entre atual e outras → olha espera
+  if (maxQueueSizeAmongOthers === currentPhaseQueueSize) {
+    const tiedDirections = DIRECTIONS_IN_ORDER.filter(
+      (direction) => queues[direction] === currentPhaseQueueSize
+    );
+
+    const chosenDirection = tiedDirections.reduce((best, candidate) => {
+      const bestWait = getFirstVehicleWaitTime(best);
+      const candidateWait = getFirstVehicleWaitTime(candidate);
+      return candidateWait > bestWait ? candidate : best;
+    }, tiedDirections[0]);
+
+    if (chosenDirection !== currentPhase) {
+      return chosenDirection;
+    }
+  }
+
+  // 3) Sem motivo forte para trocar → round-robin
+  const currentIndex = DIRECTIONS_IN_ORDER.indexOf(currentPhase);
+  const nextIndex = (currentIndex + 1) % DIRECTIONS_IN_ORDER.length;
+  return DIRECTIONS_IN_ORDER[nextIndex];
+}
 
 export function useHeuristicTrafficLightSim(
-  initial?: Partial<SimulationConfig>,
-  canvasSize: { width?: number; height?: number } = {}
+  initialConfig?: Partial<SimulationConfig>,
+  canvasSize: CanvasSize = {}
 ) {
-  
-  const config = useMemo<SimulationConfig>(
-    () => ({ ...DEFAULT_CONFIG, ...initial }),
-    [initial]
+  const config: SimulationConfig = useMemo(
+    () => ({ ...DEFAULT_CONFIG, ...initialConfig }),
+    [initialConfig]
   );
 
-  // ---- estado principal
-  const [counts, setCounts] = useState<Record<Direction, number>>({
-    N: 0,
-    E: 0,
-    S: 0,
-    W: 0,
-  });
+  const [isPaused, setIsPaused] = useState(false);
 
-  const [phase, setPhase] = useState<Direction>("N");
-  const [subState, setSubState] = useState<SubState>("green");
-  const [timer, setTimer] = useState<number>(config.GREEN_MIN);
-  const [paused, setPaused] = useState(false);
-  const [simTime, setSimTime] = useState(0);
-  const [served, setServed] = useState(0);
-  const [avgWait, setAvgWait] = useState(0);
+  const [simulationState, setSimulationState] = useState<SimulationState>(
+    () => ({
+      time: 0,
+      phase: "N",
+      subState: "green",
+      timer: config.GREEN_MIN,
+      queues: createEmptyQueues(),
+      arrivalTimes: createEmptyArrivalTimes(),
+      queueAges: createEmptyQueueAges(),
+      servedCount: 0,
+      totalWaitTime: 0,
+    })
+  );
 
-  // para calcular espera média por veículo atendido
-  // bornTimesRef mantém os tempos de chegada apenas dos veículos ainda na fila
-  const bornTimesRef = useRef<Record<Direction, number[]>>({
-    N: [],
-    E: [],
-    S: [],
-    W: [],
-  });
-  
+  // -------- derivados --------
 
-  // tempos de espera por fila (calculados a partir de bornTimesRef)
-  const waitTimes = useMemo(() => {
-    const wt: Record<Direction, number> = { N: 0, E: 0, S: 0, W: 0 };
+  const averageWaitTime = useMemo(() => {
+    return simulationState.servedCount > 0
+      ? simulationState.totalWaitTime / simulationState.servedCount
+      : 0;
+  }, [simulationState.totalWaitTime, simulationState.servedCount]);
 
-    (["N", "E", "S", "W"] as Direction[]).forEach((d) => {
-      if (counts[d] > 0 && bornTimesRef.current[d].length > 0) {
-        wt[d] = simTime - bornTimesRef.current[d][0];
+  // tempo da fila = “idade” da fila desde o último fechamento do sinal
+  const waitTimesByDirection: WaitTimesByDirection = useMemo(() => {
+    const waitTimes: WaitTimesByDirection = { N: 0, E: 0, S: 0, W: 0 };
+
+    for (const direction of DIRECTIONS_IN_ORDER) {
+      const queueSize = simulationState.queues[direction];
+      if (queueSize === 0) {
+        waitTimes[direction] = 0;
       } else {
-        wt[d] = 0;
+        waitTimes[direction] = simulationState.queueAges[direction];
       }
-    });
+    }
 
-    return wt;
-  }, [simTime, counts]);
+    return waitTimes;
+  }, [simulationState.queues, simulationState.queueAges]);
 
+  // -------- ações públicas --------
 
-  
-  // ---- ações públicas
-  const addCar = useCallback(
-    (d: Direction) => {
-      setCounts((c) => ({ ...c, [d]: c[d] + 1 }));
-      // registra tempo de chegada do veículo (usado para cálculo de espera por veículo)
-      bornTimesRef.current[d].push(simTime);
-    },
-    [simTime]
-  );
-
-  const reset = useCallback(() => {
-    setCounts({ N: 0, E: 0, S: 0, W: 0 });
-    bornTimesRef.current = { N: [], E: [], S: [], W: [] };
-    setPhase("N");
-    setSubState("green");
-    setTimer(config.GREEN_MIN);
-    setSimTime(0);
-    setServed(0);
-    setAvgWait(0);
-    setPaused(false);
-  }, [config.GREEN_MIN]);
-
-  const togglePause = useCallback(() => setPaused((p) => !p), []);
-
-  // ---- política heurística
-  const chooseNextPhase = useCallback(
-    (
-      c: Record<Direction, number>,
-      current: Direction,
-      now: number
-    ): Direction => {
-      const others = DIR_ORDER.filter((d) => d !== current);
-
-      // 1) encontrar maior contagem entre os outros
-      let maxOthersCount = -Infinity;
-      others.forEach((d) => {
-        if (c[d] > maxOthersCount) maxOthersCount = c[d];
-      });
-
-      const bestCandidates = others.filter((d) => c[d] === maxOthersCount);
-
-      // função auxiliar para obter tempo de espera real do "primeiro" carro na fila
-      const getWait = (d: Direction) =>
-        c[d] > 0 && bornTimesRef.current[d].length > 0
-          ? now - bornTimesRef.current[d][0]
-          : 0;
-
-      // 2) se algum outro tem pelo menos SWITCH_THRESHOLD a mais, escolha entre os com maior contagem
-      if (maxOthersCount >= c[current] + config.SWITCH_THRESHOLD) {
-        // entre os candidatos com maior contagem, escolher o que tem maior espera
-        return bestCandidates.reduce((acc, d) => {
-          return getWait(d) > getWait(acc) ? d : acc;
-        }, bestCandidates[0]);
-      }
-
-      // 3) se houver empate (mesma contagem entre current e outros), analisar todos os empatados (incluindo current)
-      if (maxOthersCount === c[current]) {
-        const tied = DIR_ORDER.filter((d) => c[d] === c[current]);
-        const chosen = tied.reduce((acc, d) => {
-          return getWait(d) > getWait(acc) ? d : acc;
-        }, tied[0]);
-
-        if (chosen !== current) return chosen;
-      }
-
-      // 4) caso contrário, não há motivo sólido para trocar → ir ao próximo na ordem
-      const idx = DIR_ORDER.indexOf(current);
-      return DIR_ORDER[(idx + 1) % DIR_ORDER.length];
-    },
-    [config.SWITCH_THRESHOLD]
-  );
-
-
-  // ---- loop: 1 tick = 1 segundo
-  useEffect(() => {
-    if (paused) return;
-    const id = setInterval(() => {
-      // 1) tempo simulado
-      setSimTime((t) => t + 1);
-
-      // 2) atendimento no verde
-      if (subState === "green") {
-        setCounts((c) => {
-          const d = phase;
-          const canServe = Math.min(config.SERVICE_RATE, c[d]);
-
-          if (canServe > 0) {
-            // atualizar métricas de espera
-            const births = bornTimesRef.current[d];
-            let waitSum = 0;
-            for (let i = 0; i < canServe; i++) {
-              const born = births.shift();
-              if (born != null) waitSum += simTime + 1 - born;
-            }
-
-            if (canServe > 0) {
-              // garantir cálculo consistente usando atualizações funcionais
-              setServed((sPrev) => {
-                const newServed = sPrev + canServe;
-                setAvgWait((wPrev) => {
-                  const newTotalWait = wPrev * sPrev + waitSum;
-                  return newServed > 0 ? newTotalWait / newServed : 0;
-                });
-                return newServed;
-              });
-            }
-          }
-
-          const newCount = Math.max(0, c[d] - config.SERVICE_RATE);
-
-          // se a fila zerou → garantir que a lista de nascimentos está vazia
-          if (newCount === 0) {
-            bornTimesRef.current[d] = [];
-          }
-
-          return { ...c, [d]: newCount };
-        });
-      }
-
-      // 3) controlador de fases
-      setTimer((t) => t - 1);
-
-      const decideAfterGreen = () => {
-        const next = chooseNextPhase(counts, phase, simTime);
-
-        if (next !== phase || counts[phase] === 0) {
-          setSubState("yellow");
-          setTimer(config.YELLOW);
-        } else {
-          setTimer(Math.ceil(config.GREEN_MIN / 2));
-        }
+  const addCar = useCallback((direction: Direction) => {
+    setSimulationState((prev) => {
+      const newQueues: QueueByDirection = {
+        ...prev.queues,
+        [direction]: prev.queues[direction] + 1,
       };
 
+      const newArrivalTimes: ArrivalTimesByDirection = {
+        ...prev.arrivalTimes,
+        [direction]: [
+          ...prev.arrivalTimes[direction],
+          prev.time, // tempo atual da simulação como "tempo de chegada"
+        ],
+      };
 
-      // transições
-      setTimeout(() => {
-        if (timer - 1 > 0) return;
+      return {
+        ...prev,
+        queues: newQueues,
+        arrivalTimes: newArrivalTimes,
+      };
+    });
+  }, []);
 
+  const resetSimulation = useCallback(() => {
+    setSimulationState({
+      time: 0,
+      phase: "N",
+      subState: "green",
+      timer: config.GREEN_MIN,
+      queues: createEmptyQueues(),
+      arrivalTimes: createEmptyArrivalTimes(),
+      queueAges: createEmptyQueueAges(),
+      servedCount: 0,
+      totalWaitTime: 0,
+    });
+    setIsPaused(false);
+  }, [config.GREEN_MIN]);
+
+  const togglePause = useCallback(() => {
+    setIsPaused((previous) => !previous);
+  }, []);
+
+  // -------- loop de simulação: 1 tick = 1 segundo --------
+
+  useEffect(() => {
+    if (isPaused) return;
+
+    const intervalId = setInterval(() => {
+      setSimulationState((prev) => {
+        const nextTime = prev.time + 1;
+
+        let {
+          phase,
+          subState,
+          timer,
+          queues,
+          arrivalTimes,
+          queueAges,
+          servedCount,
+          totalWaitTime,
+        } = prev;
+
+        // 1) Atendimento no verde
         if (subState === "green") {
-          decideAfterGreen();
-        } else if (subState === "yellow") {
-          setSubState("allred");
-          setTimer(config.ALL_RED);
-        } else if (subState === "allred") {
-          const next = chooseNextPhase(counts, phase, simTime);
-          setPhase(next);
-          setSubState("green");
-          setTimer(config.GREEN_MIN);
+          const activeDirection = phase;
+          const currentQueueSize = queues[activeDirection];
+
+          const vehiclesThatCanBeServed = Math.min(
+            config.SERVICE_RATE,
+            currentQueueSize
+          );
+
+          if (vehiclesThatCanBeServed > 0) {
+            const arrivalQueueCopy = [...arrivalTimes[activeDirection]];
+
+            let accumulatedWaitTime = 0;
+            for (let i = 0; i < vehiclesThatCanBeServed; i += 1) {
+              const arrivalTime = arrivalQueueCopy.shift();
+              if (arrivalTime != null) {
+                accumulatedWaitTime += nextTime - arrivalTime;
+              }
+            }
+
+            const updatedQueueSize = currentQueueSize - vehiclesThatCanBeServed;
+
+            const updatedQueues: QueueByDirection = {
+              ...queues,
+              [activeDirection]: Math.max(0, updatedQueueSize),
+            };
+
+            const updatedArrivalTimes: ArrivalTimesByDirection = {
+              ...arrivalTimes,
+              [activeDirection]: arrivalQueueCopy,
+            };
+
+            queues = updatedQueues;
+            arrivalTimes = updatedArrivalTimes;
+            servedCount += vehiclesThatCanBeServed;
+            totalWaitTime += accumulatedWaitTime;
+          }
         }
-      }, 0);
+
+        // 2) Atualizar “idade” das filas (queueAges)
+        let nextQueueAges: QueueAgesByDirection = { ...queueAges };
+
+        for (const direction of DIRECTIONS_IN_ORDER) {
+          const queueSize = queues[direction];
+
+          if (queueSize === 0) {
+            // sem carros → tempo da fila é 0
+            nextQueueAges[direction] = 0;
+          } else {
+            // existe fila → incrementa 1 segundo
+            nextQueueAges[direction] = nextQueueAges[direction] + 1;
+          }
+        }
+
+        // 3) Atualiza timer de subfase
+        let nextTimer = timer - 1;
+        let nextPhase = phase;
+        let nextSubState = subState;
+
+        // 4) Transições de subEstado
+        if (nextTimer <= 0) {
+          if (subState === "green") {
+            const chosenNextPhase = chooseNextPhaseHeuristic(
+              queues,
+              phase,
+              nextTime,
+              arrivalTimes,
+              config.SWITCH_THRESHOLD
+            );
+
+            if (chosenNextPhase !== phase || queues[phase] === 0) {
+              // sinal está "fechando" (green → yellow) para a fase atual
+              // → resetar tempo da fila daquela direção, independente se ainda há carros
+              nextQueueAges[phase] = 0;
+
+              nextSubState = "yellow";
+              nextTimer = config.YELLOW;
+            } else {
+              // mantém um pouco mais de verde
+              nextTimer = Math.ceil(config.GREEN_MIN / 2);
+            }
+          } else if (subState === "yellow") {
+            nextSubState = "allred";
+            nextTimer = config.ALL_RED;
+          } else if (subState === "allred") {
+            const chosenNextPhase = chooseNextPhaseHeuristic(
+              queues,
+              phase,
+              nextTime,
+              arrivalTimes,
+              config.SWITCH_THRESHOLD
+            );
+
+            nextPhase = chosenNextPhase;
+            nextSubState = "green";
+            nextTimer = config.GREEN_MIN;
+          }
+        }
+
+        return {
+          time: nextTime,
+          phase: nextPhase,
+          subState: nextSubState,
+          timer: nextTimer,
+          queues,
+          arrivalTimes,
+          queueAges: nextQueueAges,
+          servedCount,
+          totalWaitTime,
+        };
+      });
     }, 1000);
 
-    return () => clearInterval(id);
+    return () => clearInterval(intervalId);
   }, [
-    paused,
-    subState,
-    phase,
-    timer,
-    counts,
-    simTime,
-    served,
-    config.ALL_RED,
-    config.GREEN_MIN,
+    isPaused,
     config.SERVICE_RATE,
-    config.SWITCH_THRESHOLD,
+    config.GREEN_MIN,
     config.YELLOW,
-    chooseNextPhase,
+    config.ALL_RED,
+    config.SWITCH_THRESHOLD,
   ]);
 
   const canvas = {
     width: canvasSize.width ?? 900,
     height: canvasSize.height ?? 600,
   };
-  
 
   return {
-    counts,
-    waitTimes,
-    phase,
-    subState,
-    timer,
-    simTime,
-    served,
-    avgWait,
-    paused,
+    counts: simulationState.queues,
+    waitTimes: waitTimesByDirection, // tempo da fila (reseta ao fechar ou zerar)
+    phase: simulationState.phase,
+    subState: simulationState.subState,
+    timer: simulationState.timer,
+    simTime: simulationState.time,
+    served: simulationState.servedCount,
+    avgWait: averageWaitTime, // tempo médio por veículo atendido
+    paused: isPaused,
     config,
     canvas,
-    actions: { addCar, reset, togglePause },
+    actions: {
+      addCar,
+      reset: resetSimulation,
+      togglePause,
+    },
   };
-
 }
