@@ -1,8 +1,11 @@
-/* eslint-disable prefer-const */
-import { useCallback, useEffect, useMemo, useState } from "react";
+// src/hooks/use-rl-traffic.ts
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Direction } from "@/types/direction";
 import { SubState } from "@/types/light-state";
 import { SimulationConfig } from "@/types/simulation-config";
+import { DqnUIController } from "@/ai/dqn-controller";
 
 const DEFAULT_CONFIG: SimulationConfig = {
   GREEN_MIN: 6,
@@ -48,13 +51,7 @@ function createEmptyQueueAges(): QueueAgesByDirection {
   return { N: 0, E: 0, S: 0, W: 0 };
 }
 
-/**
- * Política heurística:
- * - se alguma outra direção tem fila >= fila atual + limiar → prioriza essa,
- *   escolhendo entre as empatadas pela maior espera
- * - se há empate geral (incluindo a atual) → escolhe entre empatadas quem espera mais
- * - caso contrário → segue round-robin (N → E → S → W → N)
- */
+
 function chooseNextPhaseHeuristic(
   queues: QueueByDirection,
   currentPhase: Direction,
@@ -121,7 +118,7 @@ function chooseNextPhaseHeuristic(
   return DIRECTIONS_IN_ORDER[nextIndex];
 }
 
-export function useHeuristicTrafficLightSim(
+export function useRLTrafficLightSim(
   initialConfig?: Partial<SimulationConfig>,
   canvasSize: CanvasSize = {}
 ) {
@@ -145,6 +142,39 @@ export function useHeuristicTrafficLightSim(
       totalWaitTime: 0,
     })
   );
+
+  // -------- IA (DQN controller) --------
+
+  const controllerRef = useRef<DqnUIController | null>(null);
+  const [controllerReady, setControllerReady] = useState(false);
+  const [controllerError, setControllerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initController() {
+      try {
+        const ctrl = new DqnUIController();
+        await ctrl.init();
+        if (!cancelled) {
+          controllerRef.current = ctrl;
+          setControllerReady(true);
+        }
+      } catch (err) {
+        console.error("Falha ao inicializar DqnUIController:", err);
+        if (!cancelled) {
+          setControllerError("Modelo DQN não encontrado. Usando heurística.");
+          setControllerReady(false);
+        }
+      }
+    }
+
+    initController();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // -------- derivados --------
 
@@ -255,7 +285,8 @@ export function useHeuristicTrafficLightSim(
               }
             }
 
-            const updatedQueueSize = currentQueueSize - vehiclesThatCanBeServed;
+            const updatedQueueSize =
+              currentQueueSize - vehiclesThatCanBeServed;
 
             const updatedQueues: QueueByDirection = {
               ...queues,
@@ -281,10 +312,8 @@ export function useHeuristicTrafficLightSim(
           const queueSize = queues[direction];
 
           if (queueSize === 0) {
-            // sem carros → tempo da fila é 0
             nextQueueAges[direction] = 0;
           } else {
-            // existe fila → incrementa 1 segundo
             nextQueueAges[direction] = nextQueueAges[direction] + 1;
           }
         }
@@ -306,8 +335,8 @@ export function useHeuristicTrafficLightSim(
             );
 
             if (chosenNextPhase !== phase || queues[phase] === 0) {
-              // sinal está "fechando" (green → yellow) para a fase atual
-              // → resetar tempo da fila daquela direção, independente se ainda há carros
+              // sinal “fechando” (green → yellow) para a fase atual
+              // → resetar tempo da fila daquela direção
               nextQueueAges[phase] = 0;
 
               nextSubState = "yellow";
@@ -320,13 +349,25 @@ export function useHeuristicTrafficLightSim(
             nextSubState = "allred";
             nextTimer = config.ALL_RED;
           } else if (subState === "allred") {
-            const chosenNextPhase = chooseNextPhaseHeuristic(
-              queues,
-              phase,
-              nextTime,
-              arrivalTimes,
-              config.SWITCH_THRESHOLD
-            );
+            // RL decide aqui; fallback para heurística
+            let chosenNextPhase: Direction;
+
+            const ctrl = controllerRef.current;
+            if (ctrl && controllerReady && !controllerError) {
+              chosenNextPhase = ctrl.decideNextPhase({
+                counts: queues,
+                phase,
+                subState,
+              });
+            } else {
+              chosenNextPhase = chooseNextPhaseHeuristic(
+                queues,
+                phase,
+                nextTime,
+                arrivalTimes,
+                config.SWITCH_THRESHOLD
+              );
+            }
 
             nextPhase = chosenNextPhase;
             nextSubState = "green";
@@ -356,6 +397,8 @@ export function useHeuristicTrafficLightSim(
     config.YELLOW,
     config.ALL_RED,
     config.SWITCH_THRESHOLD,
+    controllerReady,
+    controllerError,
   ]);
 
   const canvas = {
@@ -371,10 +414,12 @@ export function useHeuristicTrafficLightSim(
     timer: simulationState.timer,
     simTime: simulationState.time,
     served: simulationState.servedCount,
-    avgWait: averageWaitTime, // tempo médio por veículo atendido
+    avgWait: averageWaitTime,
     paused: isPaused,
     config,
     canvas,
+    controllerReady,
+    controllerError,
     actions: {
       addCar,
       reset: resetSimulation,
