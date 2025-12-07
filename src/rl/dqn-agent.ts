@@ -4,11 +4,11 @@
 import * as tf from "@tensorflow/tfjs";
 
 interface Transition {
-  state: number[];     // s
-  action: number;      // a
-  reward: number;      // r
+  state: number[]; // s
+  action: number; // a
+  reward: number; // r
   nextState: number[]; // s'
-  done: boolean;       // done
+  done: boolean; // done
 }
 
 export class ReplayBuffer {
@@ -177,7 +177,7 @@ export class DQNAgent {
   static async loadFromFile(cfg: DQNConfig): Promise<DQNAgent | null> {
     try {
       const model = await tf.loadLayersModel(
-        "/models/traffic-dqn/model.json"
+        "models/traffic-dqn/traffic-dqn.json"
       );
 
       const agent = new DQNAgent(cfg);
