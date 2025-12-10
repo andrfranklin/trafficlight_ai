@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Controle Inteligente de Semáforos com Reinforcement Learning
 
-## Getting Started
+**Disciplina:** Introdução à Inteligência Artificial  
+**Semestre:** 2025.2  
+**Professor:** Andre Luis Fonseca Faustino
+**Turma:** T03
 
-First, run the development server:
+## Integrantes do Grupo
+
+- André Franklin de Oliveira Lima (20200049143)
+- Chrystian Ruan Inacio de Sousa (20230079742)
+- Iago Gabriel Nobre de Macedo (20220037927)
+
+## Descrição do Projeto
+
+Este projeto consiste no desenvolvimento de uma aplicação web para simular e visualizar um sistema de controle de semáforos inteligente. A solução utiliza técnicas de Aprendizagem por Reforço (Reinforcement Learning), especificamente o algoritmo Deep Q-Network (DQN), para otimizar o fluxo de tráfego em um cruzamento.
+
+A aplicação foi construída com Next.js e React para a interface de usuário e TensorFlow.js para a implementação e execução do modelo de IA diretamente no navegador. O sistema permite comparar o desempenho do agente inteligente com uma abordagem heurística tradicional.
+
+## Guia de Instalação e Execução
+
+O guia abaixo descreve os passos para instalar e executar o projeto localmente.
+
+### 1. Instalação das Dependências
+
+Certifique-se de ter o **Node.js v20** (ou superior) e o **npm** instalados. Clone o repositório e instale as dependências listadas no `package.json`:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Clone o repositório
+git clone https://github.com/andrfranklin/trafficlight_ai
+
+# Entre na pasta do projeto
+cd trafficlight-ai
+
+# Instale as dependências
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Como Executar
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Execute o comando abaixo no terminal para iniciar o servidor de desenvolvimento:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Inicia a aplicação em modo de desenvolvimento
+npm run dev
+```
 
-## Learn More
+O servidor será iniciado na porta 3000. Acesse [http://localhost:3000](http://localhost:3000) em seu navegador para visualizar a simulação.
 
-To learn more about Next.js, take a look at the following resources:
+## Estrutura dos Arquivos
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+A estrutura de pastas do projeto está organizada da seguinte forma, seguindo as convenções de um projeto Next.js:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `src/app/`: Contém as diferentes páginas da aplicação, como a página da simulação com IA (`/ai`), a simulação com heurística (`/heuristic`) e a de treinamento (`/train`).
+- `src/components/`: Componentes React reutilizáveis, como o painel de controle (`controlPanel`) e a tela de simulação (`simulationCanvas`).
+- `src/rl/`: Contém a lógica principal de Aprendizagem por Reforço, incluindo a definição do ambiente (`traffic-env.ts`), o agente DQN (`dqn-agent.ts`) e o script de treinamento (`train-traffic.ts`).
+- `src/ai/`: Lógica do controlador que integra o modelo treinado à simulação.
+- `public/models/`: Armazena os arquivos do modelo de TensorFlow.js pré-treinado (`.json` e `.bin`).
+- `package.json`: Define os metadados do projeto e as dependências (Next.js, React, TensorFlow.js).
 
-## Deploy on Vercel
+## Resultados e Demonstração
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+![Imagem da simulação heurística](image.png)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Referências
+
+[Adicione aqui links para artigos, documentações ou tutoriais utilizados como base para o desenvolvimento do agente de RL, do ambiente de simulação ou da interface.]
