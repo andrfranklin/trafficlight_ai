@@ -60,8 +60,26 @@ A estrutura de pastas do projeto está organizada da seguinte forma, seguindo as
 
 ## Resultados e Demonstração
 
-![Imagem da simulação heurística](image.png)
+### Modelo heurístico
+- **Dataset**
+    - **15 carros** inicialmente na fila **N**. Posteriormente, a adição de **15 carros** a **cada fila**, a **cada 3s** (seguindo a ordem S, E e W).
+    - Adicionar **5 carros** a cada fila **recém liberada** (em média 1 carro por segundo)
+    - Manipulação durante **2min30s**
+- **Resultados obtidos**
+    - Pico por fila: **16 carros**
+    - Duração do processo: **3min e 33s**
+    - Carros liberados: **131**
+    - Tempo médio de espera: **1min e 6s (66s)**
 
+- **Evidências**
+    - Durante processamento
+    ![Durante processamento](image-1.png)
+    - Término do processamento
+    ![Término do processamento](image-2.png)
+- **Análise**
+    - Tendo em vista que tivemos um **quantitativo** considerável de veículos chegando a **todo momento** e um cruzamento com **4 sentidos** (e 4 tempos de semáforo), acreditamos que o agente **respondeu bem** ao que foi proposto, trazendo uma **melhora significativa** comparado ao **modelo atual** de gestão de semáforo, visto que em cruzamentos de **grande tráfego de veículos**, os motoristas podem esperar quase **3 minutos**. (Ler fonte "_Cariocas não gostam de sinal (muito tempo) fechado_" citada na seção de referências)
 ## Referências
 
 [Adicione aqui links para artigos, documentações ou tutoriais utilizados como base para o desenvolvimento do agente de RL, do ambiente de simulação ou da interface.]
+
+- _Cariocas não gostam de sinal (muito tempo) fechado_, **O GLOBO** - https://oglobo.globo.com/rio/cariocas-nao-gostam-de-sinal-muito-tempo-fechado-4520932
