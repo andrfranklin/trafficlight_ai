@@ -60,11 +60,12 @@ A estrutura de pastas do projeto está organizada da seguinte forma, seguindo as
 
 ## Resultados e Demonstração
 
-### Modelo heurístico
-- **Dataset**
-    - **15 carros** inicialmente na fila **N**. Posteriormente, a adição de **15 carros** a **cada fila**, a **cada 3s** (seguindo a ordem S, E e W).
-    - Adicionar **5 carros** a cada fila **recém liberada** (em média 1 carro por segundo)
-    - Manipulação durante **2min30s**
+### Dataset utilizado
+- **15 carros** inicialmente na fila **N**. Posteriormente, a adição de **15 carros** a **cada fila**, a **cada 3s** (seguindo a ordem S, E e W).
+- Adicionar **5 carros** a cada fila **recém liberada** (em média 1 carro por segundo)
+- Manipulação durante **2min30s**
+
+#### Modelo heurístico
 - **Resultados obtidos**
     - Pico por fila: **16 carros**
     - Duração do processo: **3min e 33s**
@@ -76,8 +77,22 @@ A estrutura de pastas do projeto está organizada da seguinte forma, seguindo as
     ![Durante processamento](image-1.png)
     - Término do processamento
     ![Término do processamento](image-2.png)
-- **Análise**
-    - Tendo em vista que tivemos um **quantitativo** considerável de veículos chegando a **todo momento** e um cruzamento com **4 sentidos** (e 4 tempos de semáforo), acreditamos que o agente **respondeu bem** ao que foi proposto, trazendo uma **melhora significativa** comparado ao **modelo atual** de gestão de semáforo, visto que em cruzamentos de **grande tráfego de veículos**, os motoristas podem esperar quase **3 minutos**. (Ler fonte "_Cariocas não gostam de sinal (muito tempo) fechado_" citada na seção de referências)
+
+#### Modelo de Aprendizado por Reforço (RL)
+- **Resultados obtidos**
+    - Pico por fila: **15 carros**
+    - Duração do processo: **3min e 38s**
+    - Carros liberados: **139**
+    - Tempo médio de espera: **58s**
+
+- **Evidências**
+    - Durante processamento
+    ![Durante processamento](image-3.png)
+    - Término do processamento
+    ![Término do processamento](image-4.png)
+
+### Análise
+Tendo em vista que tivemos um **quantitativo** considerável de veículos chegando a **todo momento** e um cruzamento com **4 sentidos** (e 4 tempos de semáforo), acreditamos que o agente **respondeu bem** ao que foi proposto, trazendo uma **melhora significativa** comparado ao **modelo atual** de gestão de semáforo, visto que em cruzamentos de **grande tráfego de veículos**, os motoristas podem esperar quase **3 minutos**. (Ler fonte "_Cariocas não gostam de sinal (muito tempo) fechado_" citada na seção de referências)
 ## Referências
 
 [Adicione aqui links para artigos, documentações ou tutoriais utilizados como base para o desenvolvimento do agente de RL, do ambiente de simulação ou da interface.]
