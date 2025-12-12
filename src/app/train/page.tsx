@@ -7,12 +7,13 @@ import { trainTrafficAgent } from "@/rl/train-traffic";
 export default function TrainPage() {
   const [training, setTraining] = useState(false);
   const [log, setLog] = useState<string | null>(null);
+  const [episodes, setEpisodes] = useState(500);
 
   async function handleTrain() {
     setTraining(true);
-    setLog("Treinando agente DQN...");
+    setLog(`Treinando agente DQN com ${episodes} episódios...`);
     try {
-      await trainTrafficAgent();
+      await trainTrafficAgent(episodes);
       setLog("Treino concluído e modelo salvo em downloads");
     } catch (e) {
       console.error(e);
@@ -25,6 +26,30 @@ export default function TrainPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#020617", color: "#e5e7eb", padding: 24 }}>
       <h1>Treino do agente DQN</h1>
+      
+      <div style={{ marginTop: 16, marginBottom: 16 }}>
+        <label style={{ display: "block", marginBottom: 8, fontSize: 14 }}>
+          Número de episódios:
+        </label>
+        <input
+          type="number"
+          min="100"
+          max="2000"
+          value={episodes}
+          onChange={(e) => setEpisodes(parseInt(e.target.value) || 500)}
+          disabled={training}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 6,
+            border: "1px solid #334155",
+            background: "#0f172a",
+            color: "#e5e7eb",
+            fontSize: 14,
+            width: "200px",
+          }}
+        />
+      </div>
+
       <button
         disabled={training}
         onClick={handleTrain}

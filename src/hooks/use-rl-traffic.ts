@@ -51,7 +51,13 @@ function createEmptyQueueAges(): QueueAgesByDirection {
   return { N: 0, E: 0, S: 0, W: 0 };
 }
 
-
+/**
+ * Política heurística:
+ * - se alguma outra direção tem fila >= fila atual + limiar → prioriza essa,
+ *   escolhendo entre as empatadas pela maior espera
+ * - se há empate geral (incluindo a atual) → escolhe entre empatadas quem espera mais
+ * - caso contrário → segue round-robin (N → E → S → W → N)
+ */
 function chooseNextPhaseHeuristic(
   queues: QueueByDirection,
   currentPhase: Direction,
@@ -128,6 +134,7 @@ export function useRLTrafficLightSim(
   );
 
   const [isPaused, setIsPaused] = useState(false);
+  const [lastNonZeroAvgWait, setLastNonZeroAvgWait] = useState(0);
 
   const [simulationState, setSimulationState] = useState<SimulationState>(
     () => ({
@@ -178,27 +185,54 @@ export function useRLTrafficLightSim(
 
   // -------- derivados --------
 
+  // Tempo médio de espera baseado apenas nas direções com carros
   const averageWaitTime = useMemo(() => {
-    return simulationState.servedCount > 0
-      ? simulationState.totalWaitTime / simulationState.servedCount
-      : 0;
-  }, [simulationState.totalWaitTime, simulationState.servedCount]);
+    let totalWaitTime = 0;
+    let directionsWithCars = 0;
 
-  // tempo da fila = “idade” da fila desde o último fechamento do sinal
+    for (const direction of DIRECTIONS_IN_ORDER) {
+      const queueSize = simulationState.queues[direction];
+      const arrivals = simulationState.arrivalTimes[direction];
+
+      if (queueSize > 0 && arrivals.length > 0) {
+        totalWaitTime += simulationState.time - arrivals[0];
+        directionsWithCars++;
+      }
+    }
+
+    const currentAvg =
+      directionsWithCars > 0 ? totalWaitTime / directionsWithCars : 0;
+
+    if (currentAvg > 0) {
+      setLastNonZeroAvgWait(currentAvg);
+      return currentAvg;
+    }
+
+    return lastNonZeroAvgWait;
+  }, [
+    simulationState.queues,
+    simulationState.arrivalTimes,
+    simulationState.time,
+    lastNonZeroAvgWait,
+  ]);
+
+  // Tempo de espera = tempo do carro mais antigo da fila
   const waitTimesByDirection: WaitTimesByDirection = useMemo(() => {
     const waitTimes: WaitTimesByDirection = { N: 0, E: 0, S: 0, W: 0 };
 
     for (const direction of DIRECTIONS_IN_ORDER) {
       const queueSize = simulationState.queues[direction];
-      if (queueSize === 0) {
-        waitTimes[direction] = 0;
+      const arrivals = simulationState.arrivalTimes[direction];
+
+      if (queueSize > 0 && arrivals.length > 0) {
+        waitTimes[direction] = simulationState.time - arrivals[0];
       } else {
-        waitTimes[direction] = simulationState.queueAges[direction];
+        waitTimes[direction] = 0;
       }
     }
 
     return waitTimes;
-  }, [simulationState.queues, simulationState.queueAges]);
+  }, [simulationState.queues, simulationState.arrivalTimes, simulationState.time]);
 
   // -------- ações públicas --------
 
@@ -238,6 +272,7 @@ export function useRLTrafficLightSim(
       totalWaitTime: 0,
     });
     setIsPaused(false);
+    setLastNonZeroAvgWait(0);
   }, [config.GREEN_MIN]);
 
   const togglePause = useCallback(() => {
@@ -305,7 +340,7 @@ export function useRLTrafficLightSim(
           }
         }
 
-        // 2) Atualizar “idade” das filas (queueAges)
+        // 2) Atualizar "idade" das filas (queueAges) - mantido por compatibilidade
         let nextQueueAges: QueueAgesByDirection = { ...queueAges };
 
         for (const direction of DIRECTIONS_IN_ORDER) {
@@ -335,10 +370,7 @@ export function useRLTrafficLightSim(
             );
 
             if (chosenNextPhase !== phase || queues[phase] === 0) {
-              // sinal “fechando” (green → yellow) para a fase atual
-              // → resetar tempo da fila daquela direção
-              nextQueueAges[phase] = 0;
-
+              // aqui NÃO resetamos mais queueAges[phase]
               nextSubState = "yellow";
               nextTimer = config.YELLOW;
             } else {
@@ -408,13 +440,13 @@ export function useRLTrafficLightSim(
 
   return {
     counts: simulationState.queues,
-    waitTimes: waitTimesByDirection, // tempo da fila (reseta ao fechar ou zerar)
+    waitTimes: waitTimesByDirection,        // tempo do carro mais antigo
     phase: simulationState.phase,
     subState: simulationState.subState,
     timer: simulationState.timer,
     simTime: simulationState.time,
     served: simulationState.servedCount,
-    avgWait: averageWaitTime,
+    avgWait: averageWaitTime,               // média das filas com carros (com memória do último valor)
     paused: isPaused,
     config,
     canvas,

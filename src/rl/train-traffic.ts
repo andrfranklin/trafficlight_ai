@@ -5,10 +5,10 @@ import { TrafficEnv } from "./traffic-env";
 import { DQNAgent, DQNConfig } from "./dqn-agent";
 
 export async function trainTrafficAgent(
-  episodes = 200
+  episodes = 500
 ): Promise<void> {
     const env = new TrafficEnv({
-    EPISODE_LENGTH: 100, // antes era 300
+    EPISODE_LENGTH: 200, // antes era 300
     ARRIVAL_RATE: 0.3,
   });
 
