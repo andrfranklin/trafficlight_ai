@@ -7,7 +7,7 @@ import { trainTrafficAgent } from "@/rl/train-traffic";
 export default function TrainPage() {
   const [training, setTraining] = useState(false);
   const [log, setLog] = useState<string | null>(null);
-  const [episodes, setEpisodes] = useState(500);
+  const [episodes, setEpisodes] = useState(1000);
 
   async function handleTrain() {
     setTraining(true);

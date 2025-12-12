@@ -147,11 +147,47 @@ export class TrafficEnv {
       }
     }
 
-    // 6) calcula recompensa
-    const totalQueue =
-      this.counts.N + this.counts.E + this.counts.S + this.counts.W;
-    // reward negativa = queremos filas pequenas
-    const reward = -totalQueue;
+    // 6) calcula recompensa melhorada
+    const totalQueue = this.counts.N + this.counts.E + this.counts.S + this.counts.W;
+    
+    // Penalidade base pelo total de carros (normalizada)
+    let reward = -totalQueue * 0.3;
+    
+    // Recompensa por servir carros (quando está verde)
+    if (this.subState === "green") {
+      const served = Math.min(this.cfg.SERVICE_RATE, this.counts[this.phase]);
+      reward += served * 3.0; // Recompensa por servir carros
+    }
+    
+    // Se acabamos de escolher a próxima direção (allred acabou)
+    if (this.subState === "allred" && this.timer === this.cfg.ALL_RED - 1) {
+      const chosenDir = DIRS[action] ?? "N";
+      const chosenCount = this.counts[chosenDir];
+      const maxCount = Math.max(this.counts.N, this.counts.E, this.counts.S, this.counts.W);
+      const minCount = Math.min(this.counts.N, this.counts.E, this.counts.S, this.counts.W);
+      
+      // Recompensa por escolher a direção com mais carros
+      if (chosenCount === maxCount && maxCount > 0) {
+        reward += 8.0; // Bônus forte por escolher a direção correta
+      }
+      
+      // Penalidade forte por escolher direção vazia quando há outras com carros
+      if (chosenCount === 0 && maxCount > 0) {
+        reward -= 15.0; // Penalidade muito forte
+      }
+      
+      // Penalidade por desequilíbrio (quando uma fila está muito maior que outras)
+      const avgQueue = totalQueue / 4;
+      const maxDiff = maxCount - avgQueue;
+      if (maxDiff > 2) {
+        reward -= maxDiff * 1.5; // Penaliza desequilíbrio
+      }
+      
+      // Bônus adicional se escolheu a direção com mais carros E há desequilíbrio
+      if (chosenCount === maxCount && maxDiff > 3) {
+        reward += 5.0; // Bônus extra por resolver desequilíbrio
+      }
+    }
 
     // 7) encodar estado e checar terminal
     const state = this.encodeState();
