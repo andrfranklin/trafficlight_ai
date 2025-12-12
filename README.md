@@ -60,11 +60,12 @@ A estrutura de pastas do projeto está organizada da seguinte forma, seguindo as
 
 ## Resultados e Demonstração
 
-### Modelo heurístico
-- **Dataset**
-    - **15 carros** inicialmente na fila **N**. Posteriormente, a adição de **15 carros** a **cada fila**, a **cada 3s** (seguindo a ordem S, E e W).
-    - Adição de **5 carros** a cada fila **recém liberada** (em média 1 carro por segundo)
-    - Manipulação durante **2min30s**
+### Dataset utilizado
+- **15 carros** inicialmente na fila **N**. Posteriormente, a adição de **15 carros** a **cada fila**, a **cada 3s** (seguindo a ordem S, E e W).
+- Adicionar **5 carros** a cada fila **recém liberada** (em média 1 carro por segundo)
+- Manipulação durante **2min30s**
+
+#### Modelo heurístico
 - **Resultados obtidos**
     - Pico por fila: **16 carros**
     - Duração do processo: **3min e 33s**
@@ -76,10 +77,39 @@ A estrutura de pastas do projeto está organizada da seguinte forma, seguindo as
     ![Durante processamento](image-1.png)
     - Término do processamento
     ![Término do processamento](image-2.png)
-- **Análise**
-    - Tendo em vista que tivemos um **quantitativo** considerável de veículos chegando a **todo momento** e um cruzamento com **4 sentidos** (e 4 tempos de semáforo), acreditamos que o agente **respondeu bem** ao que foi proposto, trazendo uma **melhora significativa** comparado ao **modelo atual** de gestão de semáforo, visto que em cruzamentos de **grande tráfego de veículos**, os motoristas podem esperar quase **3 minutos**. (Ler fonte "_Cariocas não gostam de sinal (muito tempo) fechado_" citada na seção de referências)
+
+#### Modelo de Aprendizado por Reforço (RL)
+- **Resultados obtidos**
+    - Pico por fila: **15 carros**
+    - Duração do processo: **3min e 38s**
+    - Carros liberados: **139**
+    - Tempo médio de espera: **58s**
+
+- **Evidências**
+    - Durante processamento
+    ![Durante processamento](image-3.png)
+    - Término do processamento
+    ![Término do processamento](image-4.png)
+
+### Análise
+
+Comparando os dois modelos com base nos resultados apresentados:
+
+- Vazão (cars released): o modelo de RL liberou 139 carros contra 131 do heurístico, um ganho de 8 carros (~6,1% de aumento na taxa de liberação).  
+- Tempo médio de espera: o RL reduziu o tempo médio de espera de 66s para 58s — redução absoluta de 8s (~12,1% relativo), indicando melhor experiência média para os veículos.  
+- Pico por fila: o pico máximo por fila caiu de 16 (heurístico) para 15 (RL), sugerindo que o agente RL controla melhor os congestionamentos pontuais.  
+- Duração total: o processo com RL foi 5s mais longo (3m38s vs 3m33s), um aumento pequeno (~2,3%) que parece aceitável diante do aumento de vazão e da redução do tempo médio de espera.
+
+**Interpretação**:
+- O agente de RL apresenta vantagem na eficiência do sistema (mais veículos liberados e menor espera média), com redução do pico de fila — isto é consistente com uma política que equilibra melhor o fluxo entre direções.  
+
+**Conclusão**: com os resultados atuais, o modelo de Aprendizado por Reforço supera a heurística em throughput e tempo médio de espera, além de reduzir picos de congestionamento, tornando-o a opção preferível condicionado à confirmação por experimentos adicionais.
+
 ## Referências
 
-[Adicione aqui links para artigos, documentações ou tutoriais utilizados como base para o desenvolvimento do agente de RL, do ambiente de simulação ou da interface.]
 
-- _Cariocas não gostam de sinal (muito tempo) fechado_, **O GLOBO** - https://oglobo.globo.com/rio/cariocas-nao-gostam-de-sinal-muito-tempo-fechado-4520932
+- https://medium.com/analytics-vidhya/building-a-powerful-dqn-in-tensorflow-2-0-explanation-tutorial-d48ea8f3177a
+- https://www.tensorflow.org/agents/tutorials/1_dqn_tutorial?hl=pt-br
+- https://nextjs.org
+- https://www.tensorflow.org
+- Aulas ministradas

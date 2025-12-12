@@ -128,14 +128,14 @@ export class TrafficEnv {
     // 4) atualiza timer da subfase
     this.timer -= 1;
 
+    let actionChosenAtTransition: number | null = null;
+
     // 5) se acabou subfase -> transiciona conforme action
     if (this.timer <= 0) {
       if (this.subState === "green") {
-        // sempre vai pra amarelo
         this.subState = "yellow";
         this.timer = this.cfg.YELLOW;
       } else if (this.subState === "yellow") {
-        // sempre vai all-red
         this.subState = "allred";
         this.timer = this.cfg.ALL_RED;
       } else if (this.subState === "allred") {
@@ -144,14 +144,49 @@ export class TrafficEnv {
         this.phase = next;
         this.subState = "green";
         this.timer = this.cfg.GREEN_MIN;
+        actionChosenAtTransition = action;
       }
     }
 
-    // 6) calcula recompensa
-    const totalQueue =
-      this.counts.N + this.counts.E + this.counts.S + this.counts.W;
-    // reward negativa = queremos filas pequenas
-    const reward = -totalQueue;
+    // 6) calcula recompensa melhorada
+    const totalQueue = this.counts.N + this.counts.E + this.counts.S + this.counts.W;
+
+    let reward = -totalQueue * 0.1;
+
+    if (this.subState === "green") {
+      const served = Math.min(this.cfg.SERVICE_RATE, this.counts[this.phase]);
+      reward += served * 5.0;
+    }
+
+    if (actionChosenAtTransition !== null) {
+      const chosenDir = DIRS[actionChosenAtTransition] ?? "N";
+      const chosenCount = this.counts[chosenDir];
+      const maxCount = Math.max(this.counts.N, this.counts.E, this.counts.S, this.counts.W);
+      const avgQueue = totalQueue / 4;
+      const maxDiff = maxCount - avgQueue;
+      
+      // Recompensa por escolher a direção com mais carros
+      if (chosenCount === maxCount && maxCount > 0) {
+        reward += 10.0;
+      }
+      
+      // Penalidade forte por escolher direção vazia quando há outras com carros
+      if (chosenCount === 0 && maxCount > 0) {
+        reward -= 20.0;
+      }
+      
+      // Penalidade por desequilíbrio
+      if (maxDiff > 2) {
+        reward -= maxDiff * 1.0;
+      }
+      
+      // Bônus adicional se escolheu a direção com mais carros E há desequilíbrio
+      if (chosenCount === maxCount && maxDiff > 3) {
+        reward += 8.0;
+      }
+      
+      actionChosenAtTransition = null;
+    }
 
     // 7) encodar estado e checar terminal
     const state = this.encodeState();
