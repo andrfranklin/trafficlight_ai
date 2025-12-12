@@ -63,7 +63,7 @@ A estrutura de pastas do projeto está organizada da seguinte forma, seguindo as
 ### Modelo heurístico
 - **Dataset**
     - **15 carros** inicialmente na fila **N**. Posteriormente, a adição de **15 carros** a **cada fila**, a **cada 3s** (seguindo a ordem S, E e W).
-    - Adicionar **5 carros** a cada fila **recém liberada** (em média 1 carro por segundo)
+    - Adição de **5 carros** a cada fila **recém liberada** (em média 1 carro por segundo)
     - Manipulação durante **2min30s**
 - **Resultados obtidos**
     - Pico por fila: **16 carros**
